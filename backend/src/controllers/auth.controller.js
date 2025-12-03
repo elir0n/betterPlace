@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import tokenService from "../services/token.service.js";
 
 export const register = async (req, res) => {
   try {
@@ -47,5 +48,53 @@ export const login = async (req, res) => {
     res.json({ message: "Logged in", token, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const completeStarter = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (user.starterCompleted) {
+      return res.status(400).json({
+        success: false,
+        error: 'Starter mission already completed'
+      });
+    }
+
+    try {
+      const transaction = await tokenService.grantInitialTokens(req.user.id);
+
+      user.starterCompleted = true;
+      await user.save();
+
+      res.json({
+        success: true,
+        data: {
+          tokensEarned: transaction.amount,
+          newBalance: user.tokenBalance
+        },
+        message: 'Starter mission completed successfully'
+      });
+
+    } catch (tokenError) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to grant initial tokens'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error completing starter mission:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to complete starter mission'
+    });
   }
 };
