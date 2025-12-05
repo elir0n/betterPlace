@@ -51,7 +51,9 @@ export function CreateTaskScreen({
     setStep(2);
   };
 
-  const handleSubmit = () => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async () => {
     if (!title || !description) {
       toast.error("Please fill in all required fields");
       return;
@@ -62,10 +64,35 @@ export function CreateTaskScreen({
       return;
     }
 
-    toast.success(`Task "${title}" created successfully! 🎉`);
-    setTimeout(() => {
-      onComplete();
-    }, 1000);
+    setIsLoading(true);
+    try {
+      // Map frontend categories to backend enum
+      const categoryMap: Record<string, string> = {
+        tech: 'tech-help',
+        home: 'cleaning',
+        outdoor: 'maintenance',
+        repair: 'maintenance',
+        education: 'tutoring',
+        shopping: 'shopping'
+      };
+
+      await api.tasks.create({
+        title,
+        description,
+        category: categoryMap[selectedCategory || ''] || 'other',
+        tokenReward: reward[0],
+        location: { address: "Tel Aviv", coordinates: [34.7818, 32.0853] } // Hardcoded for now as frontend doesn't have location picker yet
+      });
+
+      toast.success(`Task "${title}" created successfully! 🎉`);
+      setTimeout(() => {
+        onComplete();
+      }, 1000);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create task");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getSuggestedReward = () => {

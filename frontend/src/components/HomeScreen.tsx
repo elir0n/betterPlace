@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { TaskCard, Task } from "./TaskCard";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Users, Sprout, Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { SidebarNavigation } from "./SidebarNavigation";
+import { api } from "../services/api";
 
 interface HomeScreenProps {
   userName: string;
@@ -35,87 +36,39 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const [activeTab, setActiveTab] = useState<"person" | "nature">("person");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock tasks data
-  const allTasks: Task[] = [
-    {
-      id: "1",
-      title: "Fix my WiFi router",
-      description:
-        "My internet keeps dropping. Need someone tech-savvy to help diagnose the issue.",
-      reward: 25,
-      distance: "0.5 km away",
-      category: "person",
-      imageUrl: "https://images.unsplash.com/photo-1606904825846-647eb07f5be2",
-      userId: "user1",
-      userName: "Sarah M.",
-    },
-    {
-      id: "2",
-      title: "Help move furniture",
-      description:
-        "Moving a couch and table to second floor. Need an extra pair of hands!",
-      reward: 40,
-      distance: "1.2 km away",
-      category: "person",
-      imageUrl: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64",
-      userId: "user2",
-      userName: "John D.",
-    },
-    {
-      id: "3",
-      title: "Clean local park",
-      description:
-        "Join us this Saturday morning to clean up the community park and plant flowers.",
-      reward: 35,
-      distance: "0.8 km away",
-      category: "nature",
-      imageUrl: "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09",
-      userId: "user3",
-      userName: "Green Team",
-    },
-    {
-      id: "4",
-      title: "Feed community cats",
-      description:
-        "Need someone to help feed the neighborhood stray cats for a week while I'm away.",
-      reward: 30,
-      distance: "0.3 km away",
-      category: "nature",
-      imageUrl: "https://images.unsplash.com/photo-1574158622682-e40e69881006",
-      userId: "user4",
-      userName: "Emma L.",
-    },
-    {
-      id: "5",
-      title: "Teach computer basics",
-      description:
-        "Elderly person needs help learning to use email and video calls.",
-      reward: 50,
-      distance: "1.5 km away",
-      category: "person",
-      imageUrl: "https://images.unsplash.com/photo-1603354350317-6f7aaa5911c5",
-      userId: "user5",
-      userName: "Robert K.",
-    },
-    {
-      id: "6",
-      title: "Water community garden",
-      description:
-        "Community garden needs daily watering. Looking for volunteers for this week.",
-      reward: 20,
-      distance: "0.6 km away",
-      category: "nature",
-      imageUrl: "https://images.unsplash.com/photo-1464226184884-fa280b87c399",
-      userId: "user6",
-      userName: "Garden Club",
-    },
-  ];
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const backendTasks = await api.tasks.list();
+        const mappedTasks: Task[] = backendTasks.map((t: any) => ({
+          id: t._id,
+          title: t.title,
+          description: t.description,
+          reward: t.tokenReward,
+          distance: "0.5 km away", // Mock distance for now
+          category: ['cleaning', 'maintenance', 'pet-care'].includes(t.category) ? 'nature' : 'person',
+          imageUrl: t.photos?.[0] || "https://images.unsplash.com/photo-1606904825846-647eb07f5be2",
+          userId: t.creator._id,
+          userName: t.creator.name
+        }));
+        setTasks(mappedTasks);
+      } catch (error) {
+        console.error("Failed to fetch tasks", error);
+        toast.error("Failed to load tasks");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTasks();
+  }, []);
 
-  const filteredTasks = allTasks.filter((task) => task.category === activeTab);
+  const filteredTasks = tasks.filter((task) => task.category === activeTab);
 
   const handleHelp = (taskId: string) => {
-    const task = allTasks.find((t) => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
     toast.success(`You've offered to help with "${task?.title}"! The requester will contact you shortly.`);
   };
 
@@ -142,7 +95,7 @@ export function HomeScreen({
                 <p className="text-muted-foreground text-xs sm:text-sm">Ready to make a difference?</p>
               </div>
             </div>
-            
+
             {/* Hamburger Menu Icon */}
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -156,9 +109,9 @@ export function HomeScreen({
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ 
-                    scale: { 
-                      repeat: Infinity, 
+                  transition={{
+                    scale: {
+                      repeat: Infinity,
                       duration: 2,
                       ease: "easeInOut"
                     }
@@ -198,27 +151,33 @@ export function HomeScreen({
 
       {/* Task Grid */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
-          >
-            {filteredTasks.map((task) => (
-              <TaskCard key={task.id} task={task} onHelp={handleHelp} />
-            ))}
-          </motion.div>
-        </AnimatePresence>
+        {isLoading ? (
+          <div className="text-center py-12">Loading tasks...</div>
+        ) : (
+          <>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
+              >
+                {filteredTasks.map((task) => (
+                  <TaskCard key={task.id} task={task} onHelp={handleHelp} />
+                ))}
+              </motion.div>
+            </AnimatePresence>
 
-        {filteredTasks.length === 0 && (
-          <div className="text-center py-12 sm:py-20">
-            <p className="text-muted-foreground text-sm sm:text-base">
-              No tasks available in this category yet.
-            </p>
-          </div>
+            {filteredTasks.length === 0 && (
+              <div className="text-center py-12 sm:py-20">
+                <p className="text-muted-foreground text-sm sm:text-base">
+                  No tasks available in this category yet.
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

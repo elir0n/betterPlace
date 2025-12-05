@@ -8,6 +8,7 @@ import { RequestDetailScreen } from "./components/RequestDetailScreen";
 import { ChatScreen } from "./components/ChatScreen";
 import { HelperProfileScreen } from "./components/HelperProfileScreen";
 import { Toaster } from "./components/ui/sonner";
+import { api } from "./services/api";
 
 type Screen =
   | "login"
@@ -28,7 +29,7 @@ export default function App() {
   const [selectedHelperId, setSelectedHelperId] = useState<string | null>(null);
   const [selectedHelperName, setSelectedHelperName] = useState<string>("");
   const [previousScreen, setPreviousScreen] = useState<Screen>("home");
-  
+
   // Notifications state
   const [hasUnreadMessages, setHasUnreadMessages] = useState(true);
   const [activeRequests, setActiveRequests] = useState([
@@ -39,7 +40,7 @@ export default function App() {
       helperCount: 2,
     },
     {
-      id: "req-2", 
+      id: "req-2",
       title: "Walk my dog",
       hasUnread: true,
       helperCount: 1,
@@ -48,24 +49,35 @@ export default function App() {
 
   // Check if user is already logged in
   useEffect(() => {
-    const loggedIn = localStorage.getItem("betterplace_logged_in");
-    const savedUserName = localStorage.getItem("betterplace_username");
-    if (loggedIn === "true" && savedUserName) {
-      setIsLoggedIn(true);
-      setUserName(savedUserName);
-      setCurrentScreen("home");
-    }
+    const checkAuth = async () => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        try {
+          const user = await api.auth.getProfile();
+          setIsLoggedIn(true);
+          setUserName(user.name);
+          setTokens(user.tokenBalance);
+          setCurrentScreen("home");
+        } catch (error) {
+          console.error("Auth check failed", error);
+          localStorage.removeItem("token");
+        }
+      }
+    };
+    checkAuth();
   }, []);
 
   const handleLogin = (username: string) => {
-    localStorage.setItem("betterplace_logged_in", "true");
-    localStorage.setItem("betterplace_username", username);
+    // We assume token is already set by LoginScreen
     setIsLoggedIn(true);
     setUserName(username);
     setCurrentScreen("home");
+    // Refresh profile to get tokens
+    api.auth.getProfile().then(user => setTokens(user.tokenBalance));
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("betterplace_logged_in");
     localStorage.removeItem("betterplace_username");
     setIsLoggedIn(false);
@@ -85,14 +97,14 @@ export default function App() {
   const handleViewRequest = (requestId: string) => {
     setSelectedRequestId(requestId);
     // Mark all messages as read for this request
-    setActiveRequests(prev => 
-      prev.map(req => 
+    setActiveRequests(prev =>
+      prev.map(req =>
         req.id === requestId ? { ...req, hasUnread: false } : req
       )
     );
     // Update unread status after state updates
     setActiveRequests(prevRequests => {
-      const hasAnyUnread = prevRequests.some(req => 
+      const hasAnyUnread = prevRequests.some(req =>
         req.id !== requestId && req.hasUnread
       );
       setHasUnreadMessages(hasAnyUnread);
