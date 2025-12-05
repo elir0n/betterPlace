@@ -17,7 +17,8 @@ import {
   Camera,
   Mic,
 } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
+import { api } from "../services/api";
 
 interface CreateTaskScreenProps {
   onBack: () => void;
@@ -36,6 +37,7 @@ export function CreateTaskScreen({
   const [description, setDescription] = useState("");
   const [reward, setReward] = useState([25]);
   const [hasPhoto, setHasPhoto] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const categories = [
     { id: "tech", label: "Tech Support", icon: Wifi, color: "#2196F3" },
@@ -51,7 +53,15 @@ export function CreateTaskScreen({
     setStep(2);
   };
 
-  const [isLoading, setIsLoading] = useState(false);
+  const getSuggestedReward = () => {
+    if (selectedCategory === "tech") return { min: 20, max: 50, suggested: 30 };
+    if (selectedCategory === "home") return { min: 30, max: 60, suggested: 40 };
+    if (selectedCategory === "outdoor") return { min: 25, max: 50, suggested: 35 };
+    if (selectedCategory === "repair") return { min: 35, max: 70, suggested: 50 };
+    if (selectedCategory === "education")
+      return { min: 40, max: 80, suggested: 60 };
+    return { min: 20, max: 60, suggested: 30 };
+  };
 
   const handleSubmit = async () => {
     if (!title || !description) {
@@ -95,15 +105,10 @@ export function CreateTaskScreen({
     }
   };
 
-  const getSuggestedReward = () => {
-    if (selectedCategory === "tech") return { min: 20, max: 50, suggested: 30 };
-    if (selectedCategory === "home") return { min: 30, max: 60, suggested: 40 };
-    if (selectedCategory === "outdoor") return { min: 25, max: 50, suggested: 35 };
-    if (selectedCategory === "repair") return { min: 35, max: 70, suggested: 50 };
-    if (selectedCategory === "education")
-      return { min: 40, max: 80, suggested: 60 };
-    return { min: 20, max: 60, suggested: 30 };
-  };
+  const suggested = getSuggestedReward();
+  // Ensure max is at least min, and cap at userTokens if possible, but don't break if userTokens < min (just show error)
+  const maxReward = Math.max(suggested.min, Math.min(suggested.max, userTokens));
+  const isBalanceLow = userTokens < suggested.min;
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -256,24 +261,35 @@ export function CreateTaskScreen({
                     <Label>Token Amount</Label>
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">💰</span>
-                      <span className="text-[#FFC107]">{reward[0]} Tokens</span>
+                      <span className={`text-xl font-bold ${isBalanceLow ? "text-red-500" : "text-[#FFC107]"}`}>
+                        {reward[0]} Tokens
+                      </span>
                     </div>
                   </div>
+
                   <Slider
                     value={reward}
                     onValueChange={setReward}
-                    min={getSuggestedReward().min}
-                    max={Math.min(getSuggestedReward().max, userTokens)}
+                    min={suggested.min}
+                    max={maxReward}
                     step={5}
                     className="mb-2"
+                    disabled={isBalanceLow}
                   />
+
                   <div className="flex justify-between text-muted-foreground">
-                    <span>{getSuggestedReward().min}</span>
+                    <span>{suggested.min}</span>
                     <span>
-                      Suggested: {getSuggestedReward().suggested}
+                      Suggested: {suggested.suggested}
                     </span>
-                    <span>{Math.min(getSuggestedReward().max, userTokens)}</span>
+                    <span>{maxReward}</span>
                   </div>
+
+                  {isBalanceLow && (
+                    <p className="text-red-500 text-sm mt-2">
+                      You need at least {suggested.min} tokens for this category.
+                    </p>
+                  )}
                 </div>
 
                 <div className="bg-[#FFC107] bg-opacity-10 border border-[#FFC107] border-opacity-30 rounded-xl p-4">
@@ -311,9 +327,10 @@ export function CreateTaskScreen({
                 </Button>
                 <Button
                   onClick={handleSubmit}
+                  disabled={isLoading || isBalanceLow}
                   className="flex-1 h-12 bg-gradient-to-r from-[#4CAF50] to-[#66BB6A] hover:from-[#45a049] hover:to-[#5da95f] text-white"
                 >
-                  Create Task
+                  {isLoading ? "Creating..." : "Create Task"}
                 </Button>
               </div>
             </Card>

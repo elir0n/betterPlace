@@ -19,7 +19,7 @@ export const register = async (req, res) => {
       name,
       phone,
       password: hashed,
-      tokenBalance: 0,
+      tokenBalance: 100,
       rating: 5
     });
 
