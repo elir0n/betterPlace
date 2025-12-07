@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import tokenService from '../services/token.service.js';
 import notificationService from '../services/notification.service.js';
 import { uploadSingle, uploadToCloudinary } from '../middleware/upload.middleware.js';
+import verificationService from '../services/verification.service.js';
 
 export const uploadCompletionPhoto = async (req, res) => {
   try {
@@ -63,10 +64,7 @@ export const uploadCompletionPhoto = async (req, res) => {
         });
       }
 
-      const existingVerification = await Verification.findOne({
-        task: taskId,
-        helper: req.user.id
-      });
+      const existingVerification = await verificationService.findByTaskAndHelper(taskId, req.user.id);
 
       if (existingVerification) {
         return res.status(409).json({
@@ -75,23 +73,17 @@ export const uploadCompletionPhoto = async (req, res) => {
         });
       }
 
-      const verification = new Verification({
-        task: taskId,
-        helper: req.user.id,
-        requester: task.creator,
+      const verification = await verificationService.createVerification({
+        taskId,
+        helperId: req.user.id,
+        requesterId: task.creator,
         completionPhoto: uploaded.secure_url,
         helperNote: helperNote ? helperNote.trim().substring(0, 500) : ''
       });
 
-      await verification.save();
-
-      task.status = 'completed';
+      task.status = 'awaiting_approval';
       task.updatedAt = new Date();
       await task.save();
-
-      const helper = await User.findById(req.user.id);
-      helper.totalTasksCompleted += 1;
-      await helper.save();
 
       await notificationService.notifyVerification(taskId, verification._id, req.user.id, task.creator);
 
@@ -162,6 +154,10 @@ export const approveCompletion = async (req, res) => {
         verification.task.status = 'completed';
         await verification.task.save();
 
+        await User.findByIdAndUpdate(verification.helper._id, {
+          $inc: { totalTasksCompleted: 1 }
+        });
+
         await notificationService.notifyRating(
           verification.task._id,
           verification._id,
@@ -199,7 +195,7 @@ export const approveCompletion = async (req, res) => {
       }
     }
 
-    await Verification.findByIdAndDelete(verificationId);
+    await verificationService.removeById(verificationId);
 
     res.json({
       success: true,

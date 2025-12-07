@@ -92,6 +92,16 @@ class TokenService {
       transaction.status = 'completed';
       await transaction.save({ session });
 
+      const releaseTx = new Transaction({
+        from: escrowUser._id,
+        to: helper._id,
+        amount: transaction.amount,
+        type: 'escrow_release',
+        task: task._id,
+        status: 'completed'
+      });
+      await releaseTx.save({ session });
+
       await session.commitTransaction();
       return transaction;
     } catch (error) {
@@ -133,6 +143,16 @@ class TokenService {
 
       transaction.status = 'refunded';
       await transaction.save({ session });
+
+      const refundTx = new Transaction({
+        from: escrowUser._id,
+        to: transaction.from._id,
+        amount: transaction.amount,
+        type: 'refund',
+        task: transaction.task,
+        status: 'completed'
+      });
+      await refundTx.save({ session });
 
       await session.commitTransaction();
       return transaction;

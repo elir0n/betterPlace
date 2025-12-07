@@ -16,7 +16,7 @@ const taskSchema = new mongoose.Schema({
   photos: [String],
   status: {
     type: String,
-    enum: ['open', 'in_progress', 'completed', 'cancelled'],
+    enum: ['open', 'in_progress', 'awaiting_approval', 'completed', 'cancelled'],
     default: 'open'
   },
   creator: {

@@ -4,6 +4,7 @@ import Offer from '../models/Offer.js';
 import Conversation from '../models/Conversation.js';
 import tokenService from '../services/token.service.js';
 import notificationService from '../services/notification.service.js';
+import taskService from '../services/task.service.js';
 
 export const createTask = async (req, res) => {
   try {
@@ -87,47 +88,12 @@ export const createTask = async (req, res) => {
 
 export const getTasks = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-    const skip = (page - 1) * limit;
-
-    const filter = { status: 'open' };
-
-    if (req.query.category) {
-      filter.category = req.query.category;
-    }
-
-    if (req.query.lat && req.query.lng && req.query.radius) {
-      const radius = parseFloat(req.query.radius);
-      filter.location = {
-        $near: {
-          $geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(req.query.lng), parseFloat(req.query.lat)]
-          },
-          $maxDistance: radius * 1000
-        }
-      };
-    }
-
-    const tasks = await Task.find(filter)
-      .populate('creator', 'name phone')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await Task.countDocuments(filter);
-
+    const { tasks, pagination } = await taskService.getTasks(req.query);
     res.json({
       success: true,
       data: {
         tasks,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
+        pagination
       }
     });
 
@@ -142,9 +108,7 @@ export const getTasks = async (req, res) => {
 
 export const getTaskById = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id)
-      .populate('creator', 'name phone')
-      .populate('assignedTo', 'name phone');
+    const task = await taskService.getTaskWithOfferCount(req.params.id);
 
     if (!task) {
       return res.status(404).json({
@@ -153,14 +117,9 @@ export const getTaskById = async (req, res) => {
       });
     }
 
-    const offersCount = await Offer.countDocuments({ task: task._id });
-
-    const taskData = task.toObject();
-    taskData.offersCount = offersCount;
-
     res.json({
       success: true,
-      data: taskData
+      data: task
     });
 
   } catch (error) {
@@ -294,7 +253,7 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
-    if (status === 'cancelled' && task.status === 'in_progress') {
+    if (status === 'cancelled' && ['open', 'in_progress', 'awaiting_approval'].includes(task.status)) {
       await tokenService.refundEscrow(taskId);
     }
 

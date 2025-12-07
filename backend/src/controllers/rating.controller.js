@@ -1,6 +1,6 @@
-import Rating from '../models/Rating.js';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
+import ratingService from '../services/rating.service.js';
 
 export const submitRating = async (req, res) => {
   try {
@@ -79,25 +79,13 @@ export const submitRating = async (req, res) => {
       });
     }
 
-    const newRating = new Rating({
+    const newRating = await ratingService.createRating({
       rater: req.user.id,
       rated: ratedUserId,
       task: taskId,
       rating: parseInt(rating),
       feedback: feedback ? feedback.trim().substring(0, 500) : ''
     });
-
-    await newRating.save();
-
-    const allUserRatings = await Rating.find({ rated: ratedUserId });
-    const averageRating = allUserRatings.reduce((sum, r) => sum + r.rating, 0) / allUserRatings.length;
-
-    await User.findByIdAndUpdate(ratedUserId, {
-      rating: Math.round(averageRating * 10) / 10
-    });
-
-    await newRating.populate('rater', 'name phone');
-    await newRating.populate('rated', 'name phone');
 
     res.status(201).json({
       success: true,
@@ -126,21 +114,14 @@ export const getUserRatings = async (req, res) => {
       });
     }
 
-    const [totalRatings, recentRatings] = await Promise.all([
-      Rating.countDocuments({ rated: userId }),
-      Rating.find({ rated: userId })
-        .populate('rater', 'name phone')
-        .populate('task', 'title')
-        .sort({ createdAt: -1 })
-        .limit(10)
-    ]);
+    const summary = await ratingService.getUserRatingSummary(userId);
 
     res.json({
       success: true,
       data: {
         averageRating: user.rating || 0,
-        totalRatings,
-        recentRatings
+        totalRatings: summary.totalRatings,
+        recentRatings: summary.recentRatings
       }
     });
 
