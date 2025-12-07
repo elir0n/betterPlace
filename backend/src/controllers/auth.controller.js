@@ -19,7 +19,7 @@ export const register = async (req, res) => {
       name,
       phone,
       password: hashed,
-      tokenBalance: 0,
+      tokenBalance: 100,
       rating: 5
     });
 
@@ -96,5 +96,15 @@ export const completeStarter = async (req, res) => {
       success: false,
       error: 'Failed to complete starter mission'
     });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
