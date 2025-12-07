@@ -4,7 +4,9 @@ const transactionSchema = new mongoose.Schema({
   from: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: function() {
+      return this.type !== 'initial_bonus';
+    }
   },
   to: {
     type: mongoose.Schema.Types.ObjectId,

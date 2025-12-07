@@ -59,7 +59,7 @@ export const createTask = async (req, res) => {
     await task.save();
 
     try {
-      await tokenService.createEscrow(task._id, req.user.id, null, tokenReward);
+      await tokenService.createEscrow(task._id, req.user.id, tokenReward);
     } catch (escrowError) {
       await Task.findByIdAndDelete(task._id);
       throw escrowError;
@@ -237,8 +237,10 @@ export const makeOffer = async (req, res) => {
       conversation.messages.push({
         sender: req.user.id,
         content: message.trim().substring(0, 1000),
-        timestamp: new Date()
+        timestamp: new Date(),
+        read: false
       });
+      conversation.updatedAt = new Date();
       await conversation.save();
     }
 

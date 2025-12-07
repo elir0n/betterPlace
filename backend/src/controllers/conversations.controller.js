@@ -134,7 +134,8 @@ export const sendMessage = async (req, res) => {
     const newMessage = {
       sender: req.user.id,
       content: content.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
+      read: false
     };
 
     conversation.messages.push(newMessage);

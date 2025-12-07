@@ -3,17 +3,13 @@ import Transaction from '../models/Transaction.js';
 import mongoose from 'mongoose';
 
 class TokenService {
-  async createEscrow(taskId, fromUser, toUser, amount) {
+  async createEscrow(taskId, fromUser, amount) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      const [from, to] = await Promise.all([
-        User.findById(fromUser).session(session),
-        User.findById(toUser).session(session)
-      ]);
-
-      if (!from || !to) {
+      const from = await User.findById(fromUser).session(session);
+      if (!from) {
         await session.abortTransaction();
         throw new Error('User not found');
       }
@@ -23,19 +19,14 @@ class TokenService {
         throw new Error('Insufficient token balance');
       }
 
-      from.tokenBalance -= amount;
-      await from.save({ session });
+      const escrowUser = await this.getOrCreateEscrowUser(session);
 
-      const escrowUser = await User.findOne({ phone: 'system_escrow' }).session(session);
-      if (!escrowUser) {
-        const systemUser = new User({
-          name: 'System Escrow',
-          phone: 'system_escrow',
-          password: 'system',
-          tokenBalance: 0
-        });
-        await systemUser.save({ session });
-      }
+      from.tokenBalance -= amount;
+      escrowUser.tokenBalance += amount;
+      await Promise.all([
+        from.save({ session }),
+        escrowUser.save({ session })
+      ]);
 
       const transaction = new Transaction({
         from: from._id,
@@ -57,12 +48,13 @@ class TokenService {
     }
   }
 
-  async releaseEscrow(verificationId) {
+  async releaseEscrow(taskId) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
       const transaction = await Transaction.findOne({
+        task: taskId,
         type: 'escrow_hold',
         status: 'pending'
       }).populate('from task').session(session);
@@ -72,11 +64,7 @@ class TokenService {
         throw new Error('No pending escrow found');
       }
 
-      const escrowUser = await User.findOne({ phone: 'system_escrow' }).session(session);
-      if (!escrowUser) {
-        await session.abortTransaction();
-        throw new Error('System escrow account not found');
-      }
+      const escrowUser = await this.getOrCreateEscrowUser(session);
 
       const task = await this.getTaskAssignedUser(transaction.task._id);
       if (!task || !task.assignedTo) {
@@ -84,12 +72,22 @@ class TokenService {
         throw new Error('Task assignment not found');
       }
 
-      escrowUser.tokenBalance -= transaction.amount;
-      await escrowUser.save({ session });
+      if (escrowUser.tokenBalance < transaction.amount) {
+        await session.abortTransaction();
+        throw new Error('Escrow balance insufficient');
+      }
 
+      escrowUser.tokenBalance -= transaction.amount;
       const helper = await User.findById(task.assignedTo).session(session);
+      if (!helper) {
+        await session.abortTransaction();
+        throw new Error('Assigned helper not found');
+      }
       helper.tokenBalance += transaction.amount;
-      await helper.save({ session });
+      await Promise.all([
+        escrowUser.save({ session }),
+        helper.save({ session })
+      ]);
 
       transaction.status = 'completed';
       await transaction.save({ session });
@@ -120,10 +118,11 @@ class TokenService {
         throw new Error('No pending escrow found');
       }
 
-      const escrowUser = await User.findOne({ phone: 'system_escrow' }).session(session);
-      if (!escrowUser) {
+      const escrowUser = await this.getOrCreateEscrowUser(session);
+
+      if (escrowUser.tokenBalance < transaction.amount) {
         await session.abortTransaction();
-        throw new Error('System escrow account not found');
+        throw new Error('Escrow balance insufficient');
       }
 
       escrowUser.tokenBalance -= transaction.amount;
@@ -244,6 +243,20 @@ class TokenService {
   async getTaskAssignedUser(taskId) {
     const Task = mongoose.model('Task');
     return await Task.findById(taskId).select('assignedTo');
+  }
+
+  async getOrCreateEscrowUser(session) {
+    let escrowUser = await User.findOne({ phone: 'system_escrow' }).session(session);
+    if (!escrowUser) {
+      escrowUser = new User({
+        name: 'System Escrow',
+        phone: 'system_escrow',
+        password: 'system',
+        tokenBalance: 0
+      });
+      await escrowUser.save({ session });
+    }
+    return escrowUser;
   }
 }
 

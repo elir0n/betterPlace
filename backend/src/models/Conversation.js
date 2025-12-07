@@ -17,11 +17,17 @@ const conversationSchema = new mongoose.Schema({
       required: true
     },
     content: String,
+    read: { type: Boolean, default: false },
     timestamp: { type: Date, default: Date.now }
   }],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
 });
 
 conversationSchema.index({ participants: 1, task: 1 });
+conversationSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
+});
 
 export default mongoose.model("Conversation", conversationSchema);

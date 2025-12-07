@@ -8,6 +8,7 @@ import taskRoutes from "./routes/tasks.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
 import verificationRoutes from "./routes/verification.routes.js";
 import ratingRoutes from "./routes/rating.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
 
 dotenv.config();
 const app = express();
@@ -20,6 +21,7 @@ app.use("/tasks", taskRoutes);
 app.use("/wallet", walletRoutes);
 app.use("/verify", verificationRoutes);
 app.use("/rating", ratingRoutes);
+app.use("/conversations", conversationRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)

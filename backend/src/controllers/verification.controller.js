@@ -3,7 +3,7 @@ import Task from '../models/Task.js';
 import User from '../models/User.js';
 import tokenService from '../services/token.service.js';
 import notificationService from '../services/notification.service.js';
-import { uploadSingle } from '../middleware/upload.middleware.js';
+import { uploadSingle, uploadToCloudinary } from '../middleware/upload.middleware.js';
 
 export const uploadCompletionPhoto = async (req, res) => {
   try {
@@ -28,6 +28,16 @@ export const uploadCompletionPhoto = async (req, res) => {
         return res.status(400).json({
           success: false,
           error: 'Photo is required'
+        });
+      }
+
+      let uploaded;
+      try {
+        uploaded = await uploadToCloudinary(req.file.buffer);
+      } catch (cloudError) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to upload photo'
         });
       }
 
@@ -69,7 +79,7 @@ export const uploadCompletionPhoto = async (req, res) => {
         task: taskId,
         helper: req.user.id,
         requester: task.creator,
-        completionPhoto: req.file.path,
+        completionPhoto: uploaded.secure_url,
         helperNote: helperNote ? helperNote.trim().substring(0, 500) : ''
       });
 
@@ -147,7 +157,7 @@ export const approveCompletion = async (req, res) => {
 
     if (approved) {
       try {
-        await tokenService.releaseEscrow(verificationId);
+        await tokenService.releaseEscrow(verification.task._id);
 
         verification.task.status = 'completed';
         await verification.task.save();
